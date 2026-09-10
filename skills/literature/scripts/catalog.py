@@ -1,5 +1,6 @@
 """Literature catalog tool: JSON is the single source of truth, BibTeX is a derived export (never hand-edited).
-Subcommands: add (from stdin JSON), add-doi (fetch by DOI), search (OpenAlex), list (filter), tags, export-bib (write .bib).
+Subcommands: add (from stdin JSON), add-doi (fetch by DOI), annotate (update notes/tags only),
+remove (delete by DOI), search (OpenAlex), list (filter), tags, export-bib (write .bib).
 Backed by OpenAlex (openalex.org): free, no API key, and unlike Crossref it also exposes
 publisher and field/topic metadata plus a built-in open-access link.
 """
@@ -77,6 +78,7 @@ def openalex_item_to_entry(it: dict) -> dict:
         "venue": source.get("display_name", ""),
         "publisher": source.get("host_organization_name", ""),
         "field": (topic.get("field") or {}).get("display_name", ""),
+        "type": it.get("type", ""),
         "doi": doi,
         "url": it.get("doi") or "",
         "abstract": rebuild_abstract(it.get("abstract_inverted_index")),
@@ -145,6 +147,36 @@ def cmd_add_doi(args):
     print(upsert(args.data, entry))
 
 
+def cmd_annotate(args):
+    if args.notes is None and args.tags is None:
+        print("Nothing to do: pass --notes and/or --tags", file=sys.stderr)
+        sys.exit(1)
+    entries = load(args.data)
+    target = args.doi.strip().lower()
+    for e in entries:
+        if (e.get("doi") or "").strip().lower() == target:
+            if args.notes is not None:
+                e["notes"] = args.notes
+            if args.tags is not None:
+                e["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
+            save(args.data, entries)
+            print(f"Annotated: {e.get('title')}")
+            return
+    print(f"No entry found with doi {args.doi}", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_remove(args):
+    entries = load(args.data)
+    target = args.doi.strip().lower()
+    kept = [e for e in entries if (e.get("doi") or "").strip().lower() != target]
+    if len(kept) == len(entries):
+        print(f"No entry found with doi {args.doi}", file=sys.stderr)
+        sys.exit(1)
+    save(args.data, kept)
+    print(f"Removed entry with doi {args.doi}")
+
+
 def build_search_filters(args) -> list:
     filters = []
     if args.author:
@@ -184,6 +216,11 @@ def cmd_search(args):
     url = "https://api.openalex.org/works?" + urllib.parse.urlencode(params)
     data = get_json(url)
     results = [openalex_item_to_entry(it) for it in data.get("results", [])]
+
+    known_dois = {(e.get("doi") or "").strip().lower() for e in load(args.data) if e.get("doi")}
+    for r in results:
+        r["already_saved"] = bool(r.get("doi")) and r["doi"].strip().lower() in known_dois
+
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
 
@@ -200,7 +237,7 @@ def matches(entry: dict, args) -> bool:
         return False
     if args.keyword:
         needle = args.keyword.lower()
-        haystack = f"{entry.get('title', '')} {entry.get('abstract', '')}".lower()
+        haystack = f"{entry.get('title', '')} {entry.get('abstract', '')} {entry.get('notes', '')}".lower()
         if needle not in haystack:
             return False
     return True
@@ -216,14 +253,27 @@ def cmd_tags(args):
     print(json.dumps(tags, ensure_ascii=False, indent=2))
 
 
+BIBTEX_TYPE_MAP = {
+    "conference-paper": "inproceedings",
+    "book-chapter": "incollection",
+    "book": "book",
+    "dissertation": "phdthesis",
+    "report": "techreport",
+}
+
+
 def to_bibtex(entry: dict) -> str:
     key = make_key(entry)
-    entry_type = "article" if entry.get("venue") else "misc"
+    entry_type = BIBTEX_TYPE_MAP.get(entry.get("type", ""))
+    if entry_type is None:
+        entry_type = "article" if entry.get("venue") else "misc"
     fields = {
         "title": entry.get("title", ""),
         "author": " and ".join(entry.get("authors") or []),
         "year": str(entry.get("year", "")),
     }
+    # ponytail: one field set for every entry type (not per-type BibTeX fields e.g. booktitle
+    # for incollection) - good enough for a personal catalog, revisit if a style guide complains.
     if entry.get("venue"):
         fields["journal"] = entry["venue"]
     if entry.get("publisher"):
@@ -256,6 +306,16 @@ def main():
     p_add_doi = sub.add_parser("add-doi", help="Fetch by DOI from OpenAlex and add/update")
     p_add_doi.add_argument("doi")
     p_add_doi.set_defaults(func=cmd_add_doi)
+
+    p_annotate = sub.add_parser("annotate", help="Update only notes/tags on an existing entry, by DOI")
+    p_annotate.add_argument("doi")
+    p_annotate.add_argument("--notes")
+    p_annotate.add_argument("--tags", help="Comma-separated, replaces the existing tag list")
+    p_annotate.set_defaults(func=cmd_annotate)
+
+    p_remove = sub.add_parser("remove", help="Remove an entry by DOI")
+    p_remove.add_argument("doi")
+    p_remove.set_defaults(func=cmd_remove)
 
     p_search = sub.add_parser("search", help="Search OpenAlex")
     p_search.add_argument("query", nargs="?", default="")

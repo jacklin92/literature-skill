@@ -1,6 +1,6 @@
 ---
 name: literature
-description: Search, catalog, tag, filter, and organize academic literature/papers. Use when the user asks to search for papers, add a paper to their literature catalog, classify/tag existing entries, filter the catalog by criteria, or export citations as BibTeX.
+description: Search, catalog, tag, filter, and organize academic literature/papers. Use when the user asks to search for papers, add a paper to their literature catalog, classify/tag or annotate existing entries, remove an entry, filter the catalog by criteria, or export citations as BibTeX.
 ---
 
 # Literature management
@@ -42,7 +42,7 @@ conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search
 
 `--venue`, `--publisher`, and `--field` are resolved to OpenAlex entity IDs first; if nothing matches, that filter is dropped with a note on stderr rather than failing the whole search.
 
-Calls OpenAlex and returns candidates (title/authors/year/venue/publisher/field/doi/url/abstract/oa_url). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically.
+Calls OpenAlex and returns candidates (title/authors/year/venue/publisher/field/type/doi/url/abstract/oa_url/**already_saved**). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically. `already_saved` is computed against the local catalog by DOI — mention it when a result is already saved instead of re-adding or re-discussing it as if new.
 
 The JSON object each search result gives you already matches what `add` expects — pipe it straight into `add` after adding a `tags` field, no reshaping needed.
 
@@ -60,13 +60,13 @@ Before adding anything from a search, work through three things — say them in 
 2. **Pin down what specifically is relevant** — the part of the abstract that connects to the user's stated need, not a restatement of the whole abstract.
 3. **Summarize the core architecture/technique with zero fluff** — no "this important paper demonstrates...", no restating the title, no generic praise. State the method/approach in as few words as it takes to be accurate.
 
-This is based on title + abstract only — never full text (see the copyright note above); if that's not enough to do #3 justice, say so instead of padding it out. Write the distilled result into `notes` when you `add`/`add-doi`, e.g.:
+This is based on title + abstract only — never full text (see the copyright note above); if that's not enough to do #3 justice, say so instead of padding it out. `add-doi` doesn't take notes/tags itself, so write the distilled result with a follow-up `annotate` call (merges in just `--notes`/`--tags`, leaves everything else alone — no need to retype the record):
 
 ```
-"notes": "Relevant to: <the specific need>. Approach: <terse technique description>."
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"
 ```
 
-so `list`/`export-bib` carry that judgment forward instead of it living only in chat history.
+(When adding manually via `add` instead, just include `"notes"`/`"tags"` in that same JSON object.) This way `list`/`export-bib`/`--keyword` carry that judgment forward instead of it living only in chat history — `--keyword` matches `notes` too, not just title/abstract.
 
 ## Classification
 
@@ -91,13 +91,29 @@ echo '{"title":"...","authors":["Author One","Author Two"],"year":2024,"venue":"
 
 Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing (or re-`add-doi`ing) the same entry updates it in place instead of creating a duplicate. Follow up with `export-bib` (see top of this file) so the exported citations stay current.
 
+To change only `notes`/`tags` on an entry that's already saved (the common case after the relevance analysis above), use `annotate` instead of re-`add`ing the whole record:
+
+```
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate "10.xxxx/..." [--notes "..."] [--tags "tag1,tag2"]
+```
+
+`--tags` replaces the whole tag list (not additive) — pass the full set you want. Looked up by DOI, so entries without one can't be annotated this way; re-`add` those instead.
+
+## Remove an entry
+
+```
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" remove "10.xxxx/..."
+```
+
+Deletes by DOI. Confirm with the user before removing anything they didn't explicitly ask to drop.
+
 ## Filter / list
 
 ```
 conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" list [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT]
 ```
 
-Filters can be combined freely (all given filters must match); omit all of them to list everything. (No `--venue`/`--publisher` filter locally — use `--keyword` for that, since it already matches against title/abstract text, or ask Claude to eyeball the small full listing.)
+Filters can be combined freely (all given filters must match); omit all of them to list everything. `--keyword` matches title, abstract, and notes. (No `--venue`/`--publisher` filter locally — use `--keyword` for that, or ask Claude to eyeball the small full listing.)
 
 ## Export BibTeX
 
@@ -105,4 +121,4 @@ Filters can be combined freely (all given filters must match); omit all of them 
 conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" export-bib [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT] [--output PATH]
 ```
 
-No filters exports everything, defaulting to `data/literature.bib`. To export citations for just one topic, pass the matching filter flags — no extra scripting needed.
+No filters exports everything, defaulting to `data/literature.bib`. To export citations for just one topic, pass the matching filter flags — no extra scripting needed. Entry type is picked from OpenAlex's own `type` (conference paper → `@inproceedings`, book chapter → `@incollection`, book → `@book`, dissertation → `@phdthesis`, report → `@techreport`, otherwise `@article`/`@misc` depending on whether a venue is known) — one shared field set across types (not per-type BibTeX fields), good enough for a personal catalog.
