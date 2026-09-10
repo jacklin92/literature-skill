@@ -1,9 +1,10 @@
 """Literature catalog tool: JSON is the single source of truth, BibTeX is a derived export (never hand-edited).
-Subcommands: add (from stdin JSON), add-doi (fetch by DOI), search (Crossref), list (filter), tags, export-bib (write .bib).
+Subcommands: add (from stdin JSON), add-doi (fetch by DOI), search (OpenAlex), list (filter), tags, export-bib (write .bib).
+Backed by OpenAlex (openalex.org): free, no API key, and unlike Crossref it also exposes
+publisher and field/topic metadata plus a built-in open-access link.
 """
 import argparse
 import json
-import os
 import re
 import sys
 import urllib.parse
@@ -48,25 +49,38 @@ def dedup_id(entry: dict) -> str:
     return f"ty:{slugify(entry.get('title', '')).lower()}:{entry.get('year', '')}"
 
 
-def crossref_item_to_entry(it: dict) -> dict:
-    authors = [
-        f"{a.get('given', '')} {a.get('family', '')}".strip()
-        for a in it.get("author", [])
-    ]
-    year = None
-    for date_field in ("published-print", "published-online", "issued"):
-        parts = it.get(date_field, {}).get("date-parts")
-        if parts and parts[0]:
-            year = parts[0][0]
-            break
+def rebuild_abstract(inverted_index: dict) -> str:
+    if not inverted_index:
+        return ""
+    slots = {}
+    for word, positions in inverted_index.items():
+        for pos in positions:
+            slots[pos] = word
+    return " ".join(slots[i] for i in sorted(slots))
+
+
+def openalex_item_to_entry(it: dict) -> dict:
+    """Map an OpenAlex work to our entry schema. OpenAlex covers publisher and field/topic
+    metadata (which Crossref does not expose), plus a built-in open-access link — no separate
+    lookup service needed. This never fetches the paper itself, only metadata + a link to it.
+    """
+    source = (it.get("primary_location") or {}).get("source") or {}
+    topic = it.get("primary_topic") or {}
+    doi = (it.get("doi") or "").removeprefix("https://doi.org/")
     return {
-        "title": (it.get("title") or [""])[0],
-        "authors": authors,
-        "year": year,
-        "venue": (it.get("container-title") or [""])[0],
-        "doi": it.get("DOI", ""),
-        "url": it.get("URL", ""),
-        "abstract": re.sub("<[^>]+>", "", it.get("abstract", "")),
+        "title": it.get("display_name") or it.get("title") or "",
+        "authors": [
+            (a.get("author") or {}).get("display_name", "")
+            for a in it.get("authorships", [])
+        ],
+        "year": it.get("publication_year"),
+        "venue": source.get("display_name", ""),
+        "publisher": source.get("host_organization_name", ""),
+        "field": (topic.get("field") or {}).get("display_name", ""),
+        "doi": doi,
+        "url": it.get("doi") or "",
+        "abstract": rebuild_abstract(it.get("abstract_inverted_index")),
+        "oa_url": (it.get("open_access") or {}).get("oa_url", ""),
     }
 
 
@@ -76,30 +90,35 @@ def get_json(url: str) -> dict:
         return json.load(resp)
 
 
-def find_oa_url(doi: str) -> str:
-    """Look up a legal open-access copy via Unpaywall (metadata/link only, never fetches the paper itself).
-    Needs the UNPAYWALL_EMAIL env var (Unpaywall's API requires a contact email); skipped if unset.
-    """
-    email = os.environ.get("UNPAYWALL_EMAIL")
-    if not email or not doi:
-        return ""
-    url = f"https://api.unpaywall.org/v2/{urllib.parse.quote(doi)}?email={urllib.parse.quote(email)}"
-    try:
-        data = get_json(url)
-    except Exception:
-        return ""
-    if not data.get("is_oa"):
-        return ""
-    return (data.get("best_oa_location") or {}).get("url", "")
+def openalex_id(url: str) -> str:
+    return url.rsplit("/", 1)[-1] if url else ""
+
+
+def resolve_source_id(name: str) -> str:
+    data = get_json("https://api.openalex.org/sources?" + urllib.parse.urlencode({"search": name, "per_page": 1}))
+    results = data.get("results") or []
+    return openalex_id(results[0]["id"]) if results else ""
+
+
+def resolve_publisher_id(name: str) -> str:
+    data = get_json("https://api.openalex.org/publishers?" + urllib.parse.urlencode({"search": name, "per_page": 1}))
+    results = data.get("results") or []
+    return openalex_id(results[0]["id"]) if results else ""
+
+
+def resolve_field_id(name: str) -> str:
+    data = get_json("https://api.openalex.org/fields")
+    needle = name.lower()
+    for f in data.get("results") or []:
+        names = [f.get("display_name", "")] + (f.get("display_name_alternatives") or [])
+        if any(needle in n.lower() for n in names):
+            return openalex_id(f["id"])
+    return ""
 
 
 def upsert(data_path: Path, entry: dict) -> str:
     entries = load(data_path)
     entry.setdefault("tags", [])
-    if entry.get("doi") and not entry.get("oa_url"):
-        oa_url = find_oa_url(entry["doi"])
-        if oa_url:
-            entry["oa_url"] = oa_url
     entry["added_at"] = datetime.now(timezone.utc).isoformat()
     oa_note = f" (open access copy: {entry['oa_url']})" if entry.get("oa_url") else ""
     new_id = dedup_id(entry)
@@ -121,30 +140,50 @@ def cmd_add(args):
 
 def cmd_add_doi(args):
     doi = args.doi.strip()
-    data = get_json(f"https://api.crossref.org/works/{urllib.parse.quote(doi)}")
-    entry = crossref_item_to_entry(data.get("message", {}))
+    data = get_json(f"https://api.openalex.org/works/doi:{doi}")
+    entry = openalex_item_to_entry(data)
     print(upsert(args.data, entry))
 
 
-def cmd_search(args):
-    params = {"rows": args.limit}
-    if args.query:
-        params["query"] = args.query
+def build_search_filters(args) -> list:
+    filters = []
     if args.author:
-        params["query.author"] = args.author
+        filters.append(f"raw_author_name.search:{args.author}")
     if args.venue:
-        params["query.container-title"] = args.venue
-    date_filters = []
+        source_id = resolve_source_id(args.venue)
+        if source_id:
+            filters.append(f"primary_location.source.id:{source_id}")
+        else:
+            print(f"Note: no matching venue found for '{args.venue}', ignoring --venue", file=sys.stderr)
+    if args.publisher:
+        publisher_id = resolve_publisher_id(args.publisher)
+        if publisher_id:
+            filters.append(f"primary_location.source.host_organization_lineage:{publisher_id}")
+        else:
+            print(f"Note: no matching publisher found for '{args.publisher}', ignoring --publisher", file=sys.stderr)
+    if args.field:
+        field_id = resolve_field_id(args.field)
+        if field_id:
+            filters.append(f"primary_topic.field.id:{field_id}")
+        else:
+            print(f"Note: no matching field found for '{args.field}', ignoring --field", file=sys.stderr)
     if args.from_year:
-        date_filters.append(f"from-pub-date:{args.from_year}")
+        filters.append(f"from_publication_date:{args.from_year}-01-01")
     if args.until_year:
-        date_filters.append(f"until-pub-date:{args.until_year}")
-    if date_filters:
-        params["filter"] = ",".join(date_filters)
-    url = "https://api.crossref.org/works?" + urllib.parse.urlencode(params)
+        filters.append(f"to_publication_date:{args.until_year}-12-31")
+    return filters
+
+
+def cmd_search(args):
+    params = {"per_page": min(args.limit, 200)}
+    if args.query:
+        params["search"] = args.query
+    filters = build_search_filters(args)
+    if filters:
+        params["filter"] = ",".join(filters)
+    url = "https://api.openalex.org/works?" + urllib.parse.urlencode(params)
     data = get_json(url)
-    items = data.get("message", {}).get("items", [])
-    results = [crossref_item_to_entry(it) for it in items]
+    results = [openalex_item_to_entry(it) for it in data.get("results", [])]
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
 
@@ -157,6 +196,8 @@ def matches(entry: dict, args) -> bool:
         needle = args.author.lower()
         if not any(needle in a.lower() for a in entry.get("authors") or []):
             return False
+    if getattr(args, "field", None) and args.field.lower() not in (entry.get("field") or "").lower():
+        return False
     if args.keyword:
         needle = args.keyword.lower()
         haystack = f"{entry.get('title', '')} {entry.get('abstract', '')}".lower()
@@ -185,6 +226,8 @@ def to_bibtex(entry: dict) -> str:
     }
     if entry.get("venue"):
         fields["journal"] = entry["venue"]
+    if entry.get("publisher"):
+        fields["publisher"] = entry["publisher"]
     if entry.get("doi"):
         fields["doi"] = entry["doi"]
     if entry.get("url"):
@@ -210,14 +253,16 @@ def main():
 
     sub.add_parser("add", help="Add/update one entry from a JSON object on stdin").set_defaults(func=cmd_add)
 
-    p_add_doi = sub.add_parser("add-doi", help="Fetch by DOI from Crossref and add/update")
+    p_add_doi = sub.add_parser("add-doi", help="Fetch by DOI from OpenAlex and add/update")
     p_add_doi.add_argument("doi")
     p_add_doi.set_defaults(func=cmd_add_doi)
 
-    p_search = sub.add_parser("search", help="Search Crossref")
+    p_search = sub.add_parser("search", help="Search OpenAlex")
     p_search.add_argument("query", nargs="?", default="")
     p_search.add_argument("--author")
-    p_search.add_argument("--venue", help="Journal/conference name (Crossref container-title)")
+    p_search.add_argument("--venue", help="Journal/conference name")
+    p_search.add_argument("--publisher")
+    p_search.add_argument("--field", help="Academic field/discipline, e.g. 'Computer Science'")
     p_search.add_argument("--from-year")
     p_search.add_argument("--until-year")
     p_search.add_argument("--limit", type=int, default=10)
@@ -228,6 +273,7 @@ def main():
         p.add_argument("--tag")
         p.add_argument("--year")
         p.add_argument("--author")
+        p.add_argument("--field")
         p.add_argument("--keyword")
         p.set_defaults(func=func)
 
@@ -237,6 +283,7 @@ def main():
     p_bib.add_argument("--tag")
     p_bib.add_argument("--year")
     p_bib.add_argument("--author")
+    p_bib.add_argument("--field")
     p_bib.add_argument("--keyword")
     p_bib.add_argument("--output", type=Path, default=DEFAULT_BIB)
     p_bib.set_defaults(func=cmd_export_bib)
