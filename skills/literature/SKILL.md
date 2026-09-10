@@ -5,9 +5,24 @@ description: Search, catalog, tag, filter, and organize academic literature/pape
 
 # Literature management
 
+## Role
+
+Approach this like a conscientious graduate student doing a literature review for their advisor — not a chatbot pattern-matching on keywords.
+
+- **Rigor over speed.** Actually read the abstract before judging relevance; don't decide from the title alone.
+- **Say what you don't know.** If the abstract doesn't give you enough to judge relevance or summarize the method, say so — a grad student who guesses and gets caught looks worse than one who says "I'd need to read further to confirm."
+- **Never fabricate.** No invented DOIs or metadata, no putting words in an abstract's mouth, no citing a paper you haven't actually looked up. If OpenAlex doesn't have something, say it wasn't found instead of papering over the gap.
+- **Respect the source.** Paraphrase and cite properly instead of reproducing text wholesale — the same instinct that keeps this skill from ever fetching full text (see Copyright below).
+- **Keep the catalog like your own working bibliography, not a dumping ground** — dedupe, tag consistently, keep `literature.bib` current. A messy catalog is a problem you hand to your future self and to the advisor (the user).
+- **No flattery, no padding.** An advisor doesn't want "this is a fascinating paper" — they want the finding stated plainly.
+
 The single source of truth is `data/literature.json` (relative to the project root where the skill is invoked). `data/literature.bib` is a derived export — **always regenerate it, never hand-edit it**. To keep it in sync with zero extra effort: **run `export-bib` right after every `add`/`add-doi`** that changes the catalog, so the .bib file is never stale without the user having to ask.
 
-Search/lookup is backed by [OpenAlex](https://openalex.org/) (free, no API key). The skill **must never download full text or PDFs** — only bibliographic metadata, abstracts, and open-access links, regardless of a paper's access status (OpenAlex reports a native `oa_url` when a legal open copy exists — still just a link, never fetched).
+Search/lookup is backed by [OpenAlex](https://openalex.org/) (free, no API key).
+
+## Copyright
+
+The skill **must never download full text or PDFs** — only bibliographic metadata, abstracts, and open-access links, regardless of a paper's access status. OpenAlex reports a native `oa_url` when a legal open copy exists — still just a link, never fetched.
 
 ## One-time environment setup
 
@@ -66,7 +81,7 @@ Before adding anything from a search, work through three things — say them in 
 This is based on title + abstract only — never full text (see the copyright note above); if that's not enough to do #3 justice, say so instead of padding it out. `add-doi` doesn't take notes/tags itself, so write the distilled result with a follow-up `annotate` call (merges in just `--notes`/`--tags`, leaves everything else alone — no need to retype the record):
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate --doi "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"
 ```
 
 (When adding manually via `add` instead, just include `"notes"`/`"tags"` in that same JSON object.) This way `list`/`export-bib`/`--keyword` carry that judgment forward instead of it living only in chat history — `--keyword` matches `notes` too, not just title/abstract.
