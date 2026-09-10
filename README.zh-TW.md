@@ -16,9 +16,42 @@
 - **篩選** —— 依標籤、年份、作者、領域或關鍵字,任意組合。
 - **匯出** —— 隨時把目錄(可篩選)重新產生成 `data/literature.bib`。
 
-![兩條新增文獻的路:add-doi,或 search 後由 Claude 篩選再 add,兩者都寫入 literature.json;list/tags 和 export-bib 都從它讀取,export-bib 再寫出 literature.bib。](assets/workflow.zh-TW.svg)
+```mermaid
+flowchart TD
+    U(["🧑 你:找 / 加 / 整理文獻"]) --> Q{手上
+    有什麼?}
 
-*兩條新增文獻的路都寫進 `literature.json`;`list`/`tags` 跟 `export-bib` 都只從它讀取,不會反過來改它。*
+    Q -->|有 DOI 或連結| AD["⚡ add-doi"]
+    Q -->|要找論文| SP["🔍 search 篩選條件
+    主題關鍵字 · 作者
+    期刊/會議 · 出版社 · 領域
+    年份區間"]
+    Q -->|想看已收錄的| L["📋 list / tags
+    依 tag · 年份
+    作者 · 領域 · 關鍵字篩選"]
+
+    SP --> S["search(查 OpenAlex)"]
+    S --> R["🧠 Claude 挑出
+    真正相關的"]
+    R --> AD2["➕ add(補上 tags)"]
+
+    AD --> J[("📚 data/literature.json")]
+    AD2 --> J
+    L --> J
+
+    J --> B["📤 export-bib"]
+    B --> F[("📄 data/literature.bib")]
+
+    classDef input fill:#4c6ef5,stroke:#364fc7,color:#fff
+    classDef action fill:#12b886,stroke:#087f5b,color:#fff
+    classDef decision fill:#f59f00,stroke:#e8590c,color:#1a1a1a
+    classDef store fill:#7048e8,stroke:#5f3dc4,color:#fff
+
+    class U input
+    class Q decision
+    class AD,SP,S,R,AD2,L,B action
+    class J,F store
+```
 
 ## 安裝
 
