@@ -1,36 +1,30 @@
 # literature-skill
 
-A Claude Code plugin: search, catalog, tag, filter, and export (BibTeX) academic literature.
+*Search a paper, decide it's relevant, file it, tag it, cite it — without ever hand-editing a .bib file.*
 
-`data/literature.json` (in your project) is the single source of truth; `data/literature.bib` is a derived export, always regenerated, never hand-edited.
+A Claude Code skill that turns literature management into a conversation: ask it to find papers, add the ones that matter to your catalog, filter by topic, and export citations. One JSON file is the single source of truth; BibTeX is always regenerated from it, never edited by hand.
+
+## How it works
+
+- **Search** — queries Crossref, Claude picks what's actually relevant, you confirm before anything is saved.
+- **Catalog** — each entry goes into `data/literature.json`, deduplicated by DOI (or title+year).
+- **Tag** — Claude classifies by content, no fixed taxonomy, reuses existing tags instead of inventing synonyms.
+- **Filter** — by tag, year, author, or keyword, any combination.
+- **Export** — regenerates `data/literature.bib` from the catalog (optionally filtered), on demand.
 
 ## Install
 
 ```
-claude
+/plugin marketplace add jacklin92/literature-skill
+/plugin install literature@literature-skill
 ```
 
-then, in `settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "literature-skill": {
-      "source": { "source": "github", "repo": "jacklin92/literature-skill" }
-    }
-  },
-  "enabledPlugins": {
-    "literature@literature-skill": true
-  }
-}
-```
-
-Or install interactively with `/plugin marketplace add jacklin92/literature-skill` followed by `/plugin install literature@literature-skill`.
-
-## Requirements
-
-- A conda environment named `literature` (the skill creates it on first use if missing: `conda create -n literature python=3.11 -y`). No extra packages needed — the script only uses the Python standard library.
+The bundled script only needs the Python standard library, but it runs inside a conda environment named `literature`; the skill creates it on first use if missing (`conda create -n literature python=3.11 -y`).
 
 ## Usage
 
-Just ask Claude, in your own words, to search for papers, add one to your catalog, tag/classify entries, filter the catalog, or export citations as BibTeX. See `skills/literature/SKILL.md` for exactly what Claude runs under the hood.
+Just ask, in your own words: "find papers on X", "add this one to my catalog", "what have I tagged as Y", "export the BibTeX for everything on Z". See [`skills/literature/SKILL.md`](skills/literature/SKILL.md) for exactly what Claude runs under the hood.
+
+## License
+
+[MIT](LICENSE).
