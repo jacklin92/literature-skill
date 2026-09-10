@@ -31,9 +31,14 @@ flowchart TD
     作者 · 領域 · 關鍵字篩選"]
 
     SP --> S["search(查 OpenAlex)"]
-    S --> R["🧠 Claude 挑出
-    真正相關的"]
-    R --> AD2["➕ add(補上 tags)"]
+    S --> R
+
+    subgraph ROLE["🎓 Claude,以認真研究生的角色"]
+        R["挑出真正相關的結果
+        不捏造"]
+        R --> AD2["寫簡短筆記
+        +tags(add)"]
+    end
 
     AD --> J[("📚 data/literature.json")]
     AD2 --> J
@@ -49,8 +54,9 @@ flowchart TD
 
     class U input
     class Q decision
-    class AD,SP,S,R,AD2,L,B action
+    class AD,SP,S,L,B action
     class J,F store
+    style ROLE fill:#fff5f5,stroke:#e03131,stroke-width:2px,color:#1a1a1a
 ```
 
 ## 安裝

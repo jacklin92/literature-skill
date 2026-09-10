@@ -30,9 +30,14 @@ flowchart TD
     author · field · keyword"]
 
     SP --> S["search (OpenAlex)"]
-    S --> R["🧠 Claude picks the
-    relevant results"]
-    R --> AD2["➕ add (+ tags)"]
+    S --> R
+
+    subgraph ROLE["🎓 Claude, as a conscientious grad student"]
+        R["picks the relevant
+        results, no fabricating"]
+        R --> AD2["writes terse notes
+        + tags (add)"]
+    end
 
     AD --> J[("📚 data/literature.json")]
     AD2 --> J
@@ -48,8 +53,9 @@ flowchart TD
 
     class U input
     class Q decision
-    class AD,SP,S,R,AD2,L,B action
+    class AD,SP,S,L,B action
     class J,F store
+    style ROLE fill:#fff5f5,stroke:#e03131,stroke-width:2px,color:#1a1a1a
 ```
 
 ## Install
