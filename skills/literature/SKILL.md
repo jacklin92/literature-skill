@@ -16,6 +16,8 @@ conda env list
 conda create -n literature python=3.11 -y   # only if "literature" isn't listed above
 ```
 
+Optionally set `UNPAYWALL_EMAIL` (any real contact email of the user's) so `add`/`add-doi` can also look up a legal open-access copy via Unpaywall — best-effort, and silently skipped if the env var isn't set. This never fetches the paper itself, only a link to where a legal free copy exists; **the skill must never download full text or PDFs**, regardless of a paper's open-access status — only bibliographic metadata, abstracts, and OA links.
+
 ## Running the core script
 
 ```

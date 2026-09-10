@@ -3,6 +3,7 @@ Subcommands: add (from stdin JSON), add-doi (fetch by DOI), search (Crossref), l
 """
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.parse
@@ -69,26 +70,48 @@ def crossref_item_to_entry(it: dict) -> dict:
     }
 
 
-def crossref_get(url: str) -> dict:
+def get_json(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": "literature-skill/1.0"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.load(resp)
 
 
+def find_oa_url(doi: str) -> str:
+    """Look up a legal open-access copy via Unpaywall (metadata/link only, never fetches the paper itself).
+    Needs the UNPAYWALL_EMAIL env var (Unpaywall's API requires a contact email); skipped if unset.
+    """
+    email = os.environ.get("UNPAYWALL_EMAIL")
+    if not email or not doi:
+        return ""
+    url = f"https://api.unpaywall.org/v2/{urllib.parse.quote(doi)}?email={urllib.parse.quote(email)}"
+    try:
+        data = get_json(url)
+    except Exception:
+        return ""
+    if not data.get("is_oa"):
+        return ""
+    return (data.get("best_oa_location") or {}).get("url", "")
+
+
 def upsert(data_path: Path, entry: dict) -> str:
     entries = load(data_path)
     entry.setdefault("tags", [])
+    if entry.get("doi") and not entry.get("oa_url"):
+        oa_url = find_oa_url(entry["doi"])
+        if oa_url:
+            entry["oa_url"] = oa_url
     entry["added_at"] = datetime.now(timezone.utc).isoformat()
+    oa_note = f" (open access copy: {entry['oa_url']})" if entry.get("oa_url") else ""
     new_id = dedup_id(entry)
     for i, existing in enumerate(entries):
         if dedup_id(existing) == new_id:
             entry["added_at"] = existing.get("added_at", entry["added_at"])
             entries[i] = entry
             save(data_path, entries)
-            return f"Updated existing entry: {entry.get('title')}"
+            return f"Updated existing entry: {entry.get('title')}{oa_note}"
     entries.append(entry)
     save(data_path, entries)
-    return f"Added: {entry.get('title')}"
+    return f"Added: {entry.get('title')}{oa_note}"
 
 
 def cmd_add(args):
@@ -98,7 +121,7 @@ def cmd_add(args):
 
 def cmd_add_doi(args):
     doi = args.doi.strip()
-    data = crossref_get(f"https://api.crossref.org/works/{urllib.parse.quote(doi)}")
+    data = get_json(f"https://api.crossref.org/works/{urllib.parse.quote(doi)}")
     entry = crossref_item_to_entry(data.get("message", {}))
     print(upsert(args.data, entry))
 
@@ -107,7 +130,7 @@ def cmd_search(args):
     url = "https://api.crossref.org/works?" + urllib.parse.urlencode(
         {"query": args.query, "rows": args.limit}
     )
-    data = crossref_get(url)
+    data = get_json(url)
     items = data.get("message", {}).get("items", [])
     results = [crossref_item_to_entry(it) for it in items]
     print(json.dumps(results, ensure_ascii=False, indent=2))
@@ -154,6 +177,8 @@ def to_bibtex(entry: dict) -> str:
         fields["doi"] = entry["doi"]
     if entry.get("url"):
         fields["url"] = entry["url"]
+    if entry.get("oa_url"):
+        fields["note"] = f"Open access: {entry['oa_url']}"
     body = ",\n".join(f"  {k} = {{{v}}}" for k, v in fields.items() if v)
     return f"@{entry_type}{{{key},\n{body}\n}}"
 
