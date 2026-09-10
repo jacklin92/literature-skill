@@ -52,6 +52,22 @@ If the user already has a specific DOI (they pasted a link, or picked one from s
 conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" add-doi "10.xxxx/..."
 ```
 
+## Relevance analysis and notes
+
+Before adding anything from a search, work through three things — say them in the chat, and distill the result into the entry's `notes` so the judgment isn't lost once the conversation scrolls past it:
+
+1. **Judge relevance against what the user actually asked for**, not just topical overlap. Sharing a keyword isn't relevance; ask whether this paper's content would actually help what they're trying to do. If the abstract doesn't give you enough to tell, say so rather than guessing.
+2. **Pin down what specifically is relevant** — the part of the abstract that connects to the user's stated need, not a restatement of the whole abstract.
+3. **Summarize the core architecture/technique with zero fluff** — no "this important paper demonstrates...", no restating the title, no generic praise. State the method/approach in as few words as it takes to be accurate.
+
+This is based on title + abstract only — never full text (see the copyright note above); if that's not enough to do #3 justice, say so instead of padding it out. Write the distilled result into `notes` when you `add`/`add-doi`, e.g.:
+
+```
+"notes": "Relevant to: <the specific need>. Approach: <terse technique description>."
+```
+
+so `list`/`export-bib` carry that judgment forward instead of it living only in chat history.
+
 ## Classification
 
 Two independent dimensions, don't confuse them:
