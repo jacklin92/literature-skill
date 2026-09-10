@@ -14,12 +14,23 @@ A Claude Code skill that turns literature management into a conversation: ask it
 
 ## Install
 
+The bundled script only needs the Python standard library, but it runs inside a conda environment named `literature`; the skill creates it on first use if missing (`conda create -n literature python=3.11 -y`).
+
+### Claude Code
+
 ```
 /plugin marketplace add jacklin92/literature-skill
 /plugin install literature@literature-skill
 ```
 
-The bundled script only needs the Python standard library, but it runs inside a conda environment named `literature`; the skill creates it on first use if missing (`conda create -n literature python=3.11 -y`).
+### Codex
+
+```bash
+codex plugin marketplace add jacklin92/literature-skill
+codex
+```
+
+Open `/plugins`, select the `literature-skill` marketplace, and install `literature`.
 
 ## Usage
 

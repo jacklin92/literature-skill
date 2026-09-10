@@ -1,0 +1,21 @@
+{
+  "name": "literature-skill",
+  "interface": {
+    "displayName": "Literature Skill"
+  },
+  "plugins": [
+    {
+      "name": "literature",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/jacklin92/literature-skill.git",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

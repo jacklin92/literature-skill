@@ -5,7 +5,7 @@ description: Search, catalog, tag, filter, and organize academic literature/pape
 
 # Literature management
 
-The single source of truth is `data/literature.json` (relative to the project root where the skill is invoked). `data/literature.bib` is a derived export — **always regenerate it, never hand-edit it**.
+The single source of truth is `data/literature.json` (relative to the project root where the skill is invoked). `data/literature.bib` is a derived export — **always regenerate it, never hand-edit it**. To keep it in sync with zero extra effort: **run `export-bib` right after every `add`/`add-doi`** that changes the catalog, so the .bib file is never stale without the user having to ask.
 
 ## One-time environment setup
 
@@ -32,9 +32,23 @@ conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search
 
 Calls the Crossref API and returns candidates (title/authors/year/venue/doi/url/abstract). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically.
 
+The JSON object each search result gives you already matches what `add` expects — pipe it straight into `add` after adding a `tags` field, no reshaping needed.
+
+If the user already has a specific DOI (they pasted a link, or picked one from search results), prefer `add-doi` over `search` + `add` — it fetches the authoritative Crossref record directly, so metadata is more accurate than a keyword search and there's no manual JSON to write:
+
+```
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" add-doi "10.xxxx/..."
+```
+
 ## Classification
 
-Tags have no fixed taxonomy — decide short, consistent tags yourself from the title/abstract (e.g. `nlp`, `transformer`, `survey`). Reuse existing tags within the same organizing session instead of inventing synonyms; run `list` first to see what tags already exist.
+Tags have no fixed taxonomy — decide short, consistent tags yourself from the title/abstract (e.g. `nlp`, `transformer`, `survey`). Reuse existing tags within the same organizing session instead of inventing synonyms. Check what's already in use with:
+
+```
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" tags
+```
+
+This is cheaper than pulling the whole catalog with `list` just to see the tag vocabulary.
 
 ## Add / update an entry
 
@@ -44,7 +58,7 @@ Add entries one at a time, piping JSON through stdin (avoids shell-escaping issu
 echo '{"title":"...","authors":["Author One","Author Two"],"year":2024,"venue":"journal or venue name","doi":"...","url":"...","abstract":"...","tags":["tag1","tag2"],"notes":"your own notes"}' | conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" add
 ```
 
-Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing the same entry updates it in place instead of creating a duplicate.
+Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing (or re-`add-doi`ing) the same entry updates it in place instead of creating a duplicate. Follow up with `export-bib` (see top of this file) so the exported citations stay current.
 
 ## Filter / list
 

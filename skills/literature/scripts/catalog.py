@@ -1,5 +1,5 @@
 """Literature catalog tool: JSON is the single source of truth, BibTeX is a derived export (never hand-edited).
-Subcommands: add (from stdin JSON), search (Crossref), list (filter), export-bib (write .bib).
+Subcommands: add (from stdin JSON), add-doi (fetch by DOI), search (Crossref), list (filter), tags, export-bib (write .bib).
 """
 import argparse
 import json
@@ -47,10 +47,36 @@ def dedup_id(entry: dict) -> str:
     return f"ty:{slugify(entry.get('title', '')).lower()}:{entry.get('year', '')}"
 
 
-def cmd_add(args):
-    entries = load(args.data)
-    raw = sys.stdin.read()
-    entry = json.loads(raw)
+def crossref_item_to_entry(it: dict) -> dict:
+    authors = [
+        f"{a.get('given', '')} {a.get('family', '')}".strip()
+        for a in it.get("author", [])
+    ]
+    year = None
+    for date_field in ("published-print", "published-online", "issued"):
+        parts = it.get(date_field, {}).get("date-parts")
+        if parts and parts[0]:
+            year = parts[0][0]
+            break
+    return {
+        "title": (it.get("title") or [""])[0],
+        "authors": authors,
+        "year": year,
+        "venue": (it.get("container-title") or [""])[0],
+        "doi": it.get("DOI", ""),
+        "url": it.get("URL", ""),
+        "abstract": re.sub("<[^>]+>", "", it.get("abstract", "")),
+    }
+
+
+def crossref_get(url: str) -> dict:
+    req = urllib.request.Request(url, headers={"User-Agent": "literature-skill/1.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.load(resp)
+
+
+def upsert(data_path: Path, entry: dict) -> str:
+    entries = load(data_path)
     entry.setdefault("tags", [])
     entry["added_at"] = datetime.now(timezone.utc).isoformat()
     new_id = dedup_id(entry)
@@ -58,43 +84,32 @@ def cmd_add(args):
         if dedup_id(existing) == new_id:
             entry["added_at"] = existing.get("added_at", entry["added_at"])
             entries[i] = entry
-            save(args.data, entries)
-            print(f"Updated existing entry: {entry.get('title')}")
-            return
+            save(data_path, entries)
+            return f"Updated existing entry: {entry.get('title')}"
     entries.append(entry)
-    save(args.data, entries)
-    print(f"Added: {entry.get('title')}")
+    save(data_path, entries)
+    return f"Added: {entry.get('title')}"
+
+
+def cmd_add(args):
+    entry = json.loads(sys.stdin.read())
+    print(upsert(args.data, entry))
+
+
+def cmd_add_doi(args):
+    doi = args.doi.strip()
+    data = crossref_get(f"https://api.crossref.org/works/{urllib.parse.quote(doi)}")
+    entry = crossref_item_to_entry(data.get("message", {}))
+    print(upsert(args.data, entry))
 
 
 def cmd_search(args):
     url = "https://api.crossref.org/works?" + urllib.parse.urlencode(
         {"query": args.query, "rows": args.limit}
     )
-    req = urllib.request.Request(url, headers={"User-Agent": "literature-skill/1.0"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.load(resp)
+    data = crossref_get(url)
     items = data.get("message", {}).get("items", [])
-    results = []
-    for it in items:
-        authors = [
-            f"{a.get('given', '')} {a.get('family', '')}".strip()
-            for a in it.get("author", [])
-        ]
-        year = None
-        for date_field in ("published-print", "published-online", "issued"):
-            parts = it.get(date_field, {}).get("date-parts")
-            if parts and parts[0]:
-                year = parts[0][0]
-                break
-        results.append({
-            "title": (it.get("title") or [""])[0],
-            "authors": authors,
-            "year": year,
-            "venue": (it.get("container-title") or [""])[0],
-            "doi": it.get("DOI", ""),
-            "url": it.get("URL", ""),
-            "abstract": re.sub("<[^>]+>", "", it.get("abstract", "")),
-        })
+    results = [crossref_item_to_entry(it) for it in items]
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
 
@@ -118,6 +133,11 @@ def matches(entry: dict, args) -> bool:
 def cmd_list(args):
     entries = [e for e in load(args.data) if matches(e, args)]
     print(json.dumps(entries, ensure_ascii=False, indent=2))
+
+
+def cmd_tags(args):
+    tags = sorted({t for e in load(args.data) for t in (e.get("tags") or [])})
+    print(json.dumps(tags, ensure_ascii=False, indent=2))
 
 
 def to_bibtex(entry: dict) -> str:
@@ -153,6 +173,10 @@ def main():
 
     sub.add_parser("add", help="Add/update one entry from a JSON object on stdin").set_defaults(func=cmd_add)
 
+    p_add_doi = sub.add_parser("add-doi", help="Fetch by DOI from Crossref and add/update")
+    p_add_doi.add_argument("doi")
+    p_add_doi.set_defaults(func=cmd_add_doi)
+
     p_search = sub.add_parser("search", help="Search Crossref")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=10)
@@ -165,6 +189,8 @@ def main():
         p.add_argument("--author")
         p.add_argument("--keyword")
         p.set_defaults(func=func)
+
+    sub.add_parser("tags", help="List distinct tags already in use").set_defaults(func=cmd_tags)
 
     p_bib = sub.add_parser("export-bib", help="Export the (optionally filtered) catalog to .bib")
     p_bib.add_argument("--tag")

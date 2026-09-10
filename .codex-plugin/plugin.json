@@ -1,0 +1,27 @@
+{
+  "name": "literature",
+  "version": "1.0.0",
+  "description": "Search, catalog, tag, filter and export (BibTeX) academic literature",
+  "author": {
+    "name": "jacklin92",
+    "url": "https://github.com/jacklin92"
+  },
+  "homepage": "https://github.com/jacklin92/literature-skill",
+  "repository": "https://github.com/jacklin92/literature-skill",
+  "license": "MIT",
+  "keywords": ["literature", "bibliography", "research", "bibtex", "crossref"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Literature",
+    "shortDescription": "Search, catalog, tag, filter and export academic literature",
+    "longDescription": "Search Crossref, keep a JSON catalog as the single source of truth, classify entries with tags, filter by tag/year/author/keyword, and export BibTeX citations on demand.",
+    "developerName": "jacklin92",
+    "category": "Productivity",
+    "capabilities": ["Instructions"],
+    "websiteURL": "https://github.com/jacklin92/literature-skill",
+    "defaultPrompt": [
+      "Search for papers on X and add the relevant ones to my literature catalog",
+      "Export BibTeX for everything I've tagged Y"
+    ]
+  }
+}
