@@ -16,41 +16,9 @@ A Claude Code skill that turns literature management into a conversation: ask it
 - **Filter** — by tag, year, author, field, or keyword, any combination.
 - **Export** — regenerates `data/literature.bib` from the catalog (optionally filtered), on demand.
 
-```mermaid
-flowchart TD
-    U(["🧑 You: find / add / organize papers"]) --> Q{What do<br/>you have?}
+![Two ways to add a paper — add-doi, or search then Claude selects then add — both write into literature.json; list/tags and export-bib both read from it, and export-bib writes literature.bib.](assets/workflow.svg)
 
-    Q -->|a DOI or link| AD["⚡ add-doi"]
-    Q -->|need to find papers| SP["🔍 search filters
-    topic keyword · author
-    venue · publisher · field
-    year range"]
-    Q -->|reviewing what's saved| L["📋 list / tags
-    filter by tag · year
-    author · field · keyword"]
-
-    SP --> S["search (OpenAlex)"]
-    S --> R["🧠 Claude picks the
-    relevant results"]
-    R --> AD2["➕ add (+ tags)"]
-
-    AD --> J[("📚 data/literature.json")]
-    AD2 --> J
-    L --> J
-
-    J --> B["📤 export-bib"]
-    B --> F[("📄 data/literature.bib")]
-
-    classDef input fill:#4c6ef5,stroke:#364fc7,color:#fff
-    classDef action fill:#12b886,stroke:#087f5b,color:#fff
-    classDef decision fill:#f59f00,stroke:#e8590c,color:#1a1a1a
-    classDef store fill:#7048e8,stroke:#5f3dc4,color:#fff
-
-    class U input
-    class Q decision
-    class AD,SP,S,R,AD2,L,B action
-    class J,F store
-```
+*Both ways of adding a paper write into `literature.json`; `list`/`tags` and `export-bib` only ever read from it.*
 
 ## Install
 
