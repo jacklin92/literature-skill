@@ -1,0 +1,9 @@
+{
+  "name": "literature",
+  "version": "1.0.0",
+  "description": "Search, catalog, tag, filter and export (BibTeX) academic literature",
+  "author": {
+    "name": "jacklin92",
+    "url": "https://github.com/jacklin92"
+  }
+}

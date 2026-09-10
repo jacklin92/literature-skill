@@ -1,0 +1,17 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "literature-skill",
+  "description": "A Claude Code skill for searching, cataloging, tagging, filtering, and exporting (BibTeX) academic literature",
+  "owner": {
+    "name": "jacklin92",
+    "url": "https://github.com/jacklin92"
+  },
+  "plugins": [
+    {
+      "name": "literature",
+      "description": "Search, catalog, tag, filter and export (BibTeX) academic literature",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
