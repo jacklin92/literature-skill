@@ -97,18 +97,18 @@ Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing (or re-`add
 To change only `notes`/`tags` on an entry that's already saved (the common case after the relevance analysis above), use `annotate` instead of re-`add`ing the whole record:
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate "10.xxxx/..." [--notes "..."] [--tags "tag1,tag2"]
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate --doi "10.xxxx/..." [--notes "..."] [--tags "tag1,tag2"]
 ```
 
-`--tags` replaces the whole tag list (not additive) — pass the full set you want. Looked up by DOI, so entries without one can't be annotated this way; re-`add` those instead.
+`--tags` replaces the whole tag list (not additive) — pass the full set you want. Identify the entry with `--doi`; for entries that have no DOI, use `--title "exact title" --year YEAR` instead (the same title+year key `add` already dedups on).
 
 ## Remove an entry
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" remove "10.xxxx/..."
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" remove --doi "10.xxxx/..."
 ```
 
-Deletes by DOI. Confirm with the user before removing anything they didn't explicitly ask to drop.
+Same identification rule as `annotate`: `--doi`, or `--title "exact title" --year YEAR` for entries with no DOI. Confirm with the user before removing anything they didn't explicitly ask to drop.
 
 ## Filter / list
 

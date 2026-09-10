@@ -177,14 +177,27 @@ def cmd_add_doi(args):
     print(upsert(args.data, entry))
 
 
+def resolve_target_id(args) -> str:
+    """--doi identifies an entry directly; --title (+ --year) is the fallback for entries that
+    have no DOI, using the same title+year key `dedup_id` already uses for those.
+    """
+    if not args.doi and not args.title:
+        print("Provide --doi, or --title (with --year) for entries that have no DOI", file=sys.stderr)
+        sys.exit(1)
+    if args.title and not args.doi and not args.year:
+        print("Provide --year along with --title to disambiguate", file=sys.stderr)
+        sys.exit(1)
+    return dedup_id({"doi": args.doi, "title": args.title, "year": args.year})
+
+
 def cmd_annotate(args):
     if args.notes is None and args.tags is None:
         print("Nothing to do: pass --notes and/or --tags", file=sys.stderr)
         sys.exit(1)
+    target = resolve_target_id(args)
     entries = load(args.data)
-    target = args.doi.strip().lower()
     for e in entries:
-        if (e.get("doi") or "").strip().lower() == target:
+        if dedup_id(e) == target:
             if args.notes is not None:
                 e["notes"] = args.notes
             if args.tags is not None:
@@ -192,19 +205,20 @@ def cmd_annotate(args):
             save(args.data, entries)
             print(f"Annotated: {e.get('title')}")
             return
-    print(f"No entry found with doi {args.doi}", file=sys.stderr)
+    print("No matching entry found", file=sys.stderr)
     sys.exit(1)
 
 
 def cmd_remove(args):
+    target = resolve_target_id(args)
     entries = load(args.data)
-    target = args.doi.strip().lower()
-    kept = [e for e in entries if (e.get("doi") or "").strip().lower() != target]
+    kept = [e for e in entries if dedup_id(e) != target]
     if len(kept) == len(entries):
-        print(f"No entry found with doi {args.doi}", file=sys.stderr)
+        print("No matching entry found", file=sys.stderr)
         sys.exit(1)
+    removed = next(e.get("title") for e in entries if dedup_id(e) == target)
     save(args.data, kept)
-    print(f"Removed entry with doi {args.doi}")
+    print(f"Removed: {removed}")
 
 
 def build_search_filters(args) -> list:
@@ -343,14 +357,18 @@ def main():
     p_add_doi.add_argument("doi")
     p_add_doi.set_defaults(func=cmd_add_doi)
 
-    p_annotate = sub.add_parser("annotate", help="Update only notes/tags on an existing entry, by DOI")
-    p_annotate.add_argument("doi")
+    p_annotate = sub.add_parser("annotate", help="Update only notes/tags on an existing entry")
+    p_annotate.add_argument("--doi", help="Identify the entry by DOI")
+    p_annotate.add_argument("--title", help="Identify the entry by title (needs --year too) when it has no DOI")
+    p_annotate.add_argument("--year")
     p_annotate.add_argument("--notes")
     p_annotate.add_argument("--tags", help="Comma-separated, replaces the existing tag list")
     p_annotate.set_defaults(func=cmd_annotate)
 
-    p_remove = sub.add_parser("remove", help="Remove an entry by DOI")
-    p_remove.add_argument("doi")
+    p_remove = sub.add_parser("remove", help="Remove an entry")
+    p_remove.add_argument("--doi", help="Identify the entry by DOI")
+    p_remove.add_argument("--title", help="Identify the entry by title (needs --year too) when it has no DOI")
+    p_remove.add_argument("--year")
     p_remove.set_defaults(func=cmd_remove)
 
     p_search = sub.add_parser("search", help="Search OpenAlex")
