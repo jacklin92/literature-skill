@@ -13,7 +13,7 @@ A Claude Code skill that turns literature management into a conversation: ask it
 - **Search** — queries [OpenAlex](https://openalex.org/) by topic keyword, author, journal/venue, publisher, academic field, and/or publication year range; Claude picks what's actually relevant, you confirm before anything is saved.
 - **Catalog** — each entry goes into `data/literature.json`, deduplicated by DOI (or title+year). Has a DOI already? `add-doi` fetches the authoritative record directly.
 - **Tag** — Claude classifies by content on top of the field OpenAlex already assigns, no fixed taxonomy, reuses existing tags instead of inventing synonyms; a short relevance/technique note gets attached too (`annotate`, without retyping the record).
-- **Filter** — by tag, year, author, field, or keyword (title, abstract, and notes), any combination. Search results also flag ones you've already saved.
+- **Filter** — by tag, year, author, field, or keyword (title, abstract, and notes), any combination. Search results flag ones you've already saved, and ones that look like a different DOI for something you already have (e.g. a preprint vs. its published version).
 - **Export** — regenerates `data/literature.bib` from the catalog (optionally filtered), on demand.
 
 ```mermaid

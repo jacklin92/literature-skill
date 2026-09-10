@@ -39,7 +39,8 @@ def slugify(text: str) -> str:
 
 
 def make_key(entry: dict) -> str:
-    author = (entry.get("authors") or ["anon"])[0].split()[-1] if entry.get("authors") else "anon"
+    authors = entry.get("authors") or []
+    author = last_name(authors[0]) if authors else "anon"
     return f"{slugify(author)}{entry.get('year', '')}{slugify((entry.get('title') or '')[:15])}"
 
 
@@ -48,6 +49,26 @@ def dedup_id(entry: dict) -> str:
     if doi:
         return f"doi:{doi}"
     return f"ty:{slugify(entry.get('title', '')).lower()}:{entry.get('year', '')}"
+
+
+def last_name(author: str) -> str:
+    # Sources disagree on "Last, First" vs "First Last" for the same person - handle both.
+    author = author.strip()
+    if "," in author:
+        return author.split(",", 1)[0].strip().lower()
+    parts = author.split()
+    return parts[-1].lower() if parts else ""
+
+
+def fuzzy_key(entry: dict) -> tuple:
+    """Same normalized title + first-author last name, ignoring DOI - catches the same paper
+    saved twice under different DOIs (e.g. a preprint and its later published version).
+    Deliberately exact-on-both-fields rather than a similarity score, to keep false positives rare.
+    """
+    title = re.sub(r"[^\w]+", "", (entry.get("title") or "").lower())
+    authors = entry.get("authors") or []
+    first_author = last_name(authors[0]) if authors else ""
+    return (title, first_author)
 
 
 def rebuild_abstract(inverted_index: dict) -> str:
@@ -130,9 +151,18 @@ def upsert(data_path: Path, entry: dict) -> str:
             entries[i] = entry
             save(data_path, entries)
             return f"Updated existing entry: {entry.get('title')}{oa_note}"
+
+    dup_note = ""
+    target_key = fuzzy_key(entry)
+    if target_key[0]:  # non-empty normalized title
+        for existing in entries:
+            if fuzzy_key(existing) == target_key and existing.get("doi") != entry.get("doi"):
+                dup_note = f" (note: possible duplicate of existing entry under a different DOI: {existing.get('doi') or '<no doi>'})"
+                break
+
     entries.append(entry)
     save(data_path, entries)
-    return f"Added: {entry.get('title')}{oa_note}"
+    return f"Added: {entry.get('title')}{oa_note}{dup_note}"
 
 
 def cmd_add(args):
@@ -217,9 +247,15 @@ def cmd_search(args):
     data = get_json(url)
     results = [openalex_item_to_entry(it) for it in data.get("results", [])]
 
-    known_dois = {(e.get("doi") or "").strip().lower() for e in load(args.data) if e.get("doi")}
+    local_entries = load(args.data)
+    known_dois = {(e.get("doi") or "").strip().lower() for e in local_entries if e.get("doi")}
+    fuzzy_index = {fuzzy_key(e): e.get("doi", "") for e in local_entries if fuzzy_key(e)[0]}
     for r in results:
         r["already_saved"] = bool(r.get("doi")) and r["doi"].strip().lower() in known_dois
+        if not r["already_saved"]:
+            match_doi = fuzzy_index.get(fuzzy_key(r))
+            if match_doi is not None:
+                r["possible_duplicate_of"] = match_doi
 
     print(json.dumps(results, ensure_ascii=False, indent=2))
 

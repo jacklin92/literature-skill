@@ -42,7 +42,10 @@ conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search
 
 `--venue`, `--publisher`, and `--field` are resolved to OpenAlex entity IDs first; if nothing matches, that filter is dropped with a note on stderr rather than failing the whole search.
 
-Calls OpenAlex and returns candidates (title/authors/year/venue/publisher/field/type/doi/url/abstract/oa_url/**already_saved**). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically. `already_saved` is computed against the local catalog by DOI — mention it when a result is already saved instead of re-adding or re-discussing it as if new.
+Calls OpenAlex and returns candidates (title/authors/year/venue/publisher/field/type/doi/url/abstract/oa_url/**already_saved**/**possible_duplicate_of**). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically.
+
+- `already_saved` — exact DOI already in the local catalog. Mention it instead of re-adding or re-discussing the result as if new.
+- `possible_duplicate_of` — present (holding the other DOI) when a *different* DOI matches an existing entry on normalized title + first-author surname, e.g. a preprint vs. the later published version of the same paper. Not auto-merged (both may be worth keeping) — flag it to the user and let them decide whether to add it anyway, or `remove` one. `add`/`add-doi` do this same check and append a note to their own output when it fires.
 
 The JSON object each search result gives you already matches what `add` expects — pipe it straight into `add` after adding a `tags` field, no reshaping needed.
 
