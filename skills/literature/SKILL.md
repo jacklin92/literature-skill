@@ -1,6 +1,6 @@
 ---
 name: literature
-description: Search, catalog, tag, filter, and organize academic literature/papers. Use when the user asks to search for papers, add a paper to their literature catalog, classify/tag or annotate existing entries, remove an entry, filter the catalog by criteria, or export citations as BibTeX.
+description: Search, catalog, tag, filter, and organize academic literature/papers. Use when the user asks to search for papers, add a paper to their literature catalog, classify/tag or annotate existing entries, remove an entry, filter the catalog by criteria, export citations as BibTeX, or read/summarize/synthesize the full text of a saved paper (or compare several).
 ---
 
 # Literature management
@@ -12,7 +12,7 @@ Approach this like a conscientious graduate student doing a literature review fo
 - **Rigor over speed.** Actually read the abstract before judging relevance; don't decide from the title alone.
 - **Say what you don't know.** If the abstract doesn't give you enough to judge relevance or summarize the method, say so — a grad student who guesses and gets caught looks worse than one who says "I'd need to read further to confirm."
 - **Never fabricate.** No invented DOIs or metadata, no putting words in an abstract's mouth, no citing a paper you haven't actually looked up. If OpenAlex doesn't have something, say it wasn't found instead of papering over the gap.
-- **Respect the source.** Paraphrase and cite properly instead of reproducing text wholesale — the same instinct that keeps this skill from ever fetching full text (see Copyright below).
+- **Respect the source.** Paraphrase and cite properly instead of reproducing large verbatim excerpts back to the user, even when you've read the full text (see Copyright below).
 - **Keep the catalog like your own working bibliography, not a dumping ground** — dedupe, tag consistently, keep `literature.bib` current. A messy catalog is a problem you hand to your future self and to the advisor (the user).
 - **No flattery, no padding.** An advisor doesn't want "this is a fascinating paper" — they want the finding stated plainly.
 
@@ -22,7 +22,22 @@ Search/lookup is backed by [OpenAlex](https://openalex.org/) (free, no API key).
 
 ## Copyright
 
-The skill **must never download full text or PDFs** — only bibliographic metadata, abstracts, and open-access links, regardless of a paper's access status. OpenAlex reports a native `oa_url` when a legal open copy exists — still just a link, never fetched.
+The line is **legitimate access, not "metadata vs. full text"**:
+
+- **`oa_url` set** — OpenAlex has already verified this is a legal open-access copy (the publisher, repository, or preprint server made it public themselves). Fetching *that specific URL* (with `WebFetch`) to read, summarize, or synthesize the paper is fine — no different from opening it in a browser.
+- **No `oa_url`** — don't go looking for a way around that: no scraping past paywalls, no unofficial mirrors, no bypassing access controls, ever. Say a legal open copy wasn't found. If the user has their own legitimate access (an institutional subscription, a PDF they already downloaded), they can hand you the text or file directly (paste it, or point Claude Code's `Read` tool at the PDF) and you can read and summarize it — that's the user using access they already have, not the skill acquiring it for them.
+- Whatever the source, paraphrase and cite instead of reproducing large verbatim excerpts back (see Role).
+
+## Reading and synthesizing full text
+
+Metadata + abstract (see the relevance-analysis SOP above) is the default — cheap, and enough for search-time relevance judgment. Read the actual paper, on request or when the abstract genuinely isn't enough to answer what the user's asking:
+
+1. Check the entry's `oa_url` (from `list`/`search`). None? Say so and offer the two legitimate alternatives above instead of guessing from the abstract alone.
+2. `WebFetch` that URL. Some open-access hosts serve an HTML landing page rather than the PDF directly — if the fetch doesn't return the actual paper text, say so rather than summarizing the landing page as if it were the paper.
+3. Synthesize what was asked for (a deeper method summary, comparing two papers, answering a specific question) — don't dump the whole paper back reformatted.
+4. Worth keeping? Fold it into `notes` via `annotate` so the deeper read isn't lost to chat history, same as the abstract-level analysis. Be clear in the note (or in chat) about which entries you've actually read in full versus judged from the abstract only — don't blur the two.
+
+Synthesizing *across* multiple saved papers (comparing approaches, finding common threads) works the same way: pull from `list`, read full text for whichever entries need it, and say plainly which parts of the synthesis rest on a full read versus an abstract.
 
 ## One-time environment setup
 
@@ -78,7 +93,7 @@ Before adding anything from a search, work through three things — say them in 
 2. **Pin down what specifically is relevant** — the part of the abstract that connects to the user's stated need, not a restatement of the whole abstract.
 3. **Summarize the core architecture/technique with zero fluff** — no "this important paper demonstrates...", no restating the title, no generic praise. State the method/approach in as few words as it takes to be accurate.
 
-This is based on title + abstract only — never full text (see the copyright note above); if that's not enough to do #3 justice, say so instead of padding it out. `add-doi` doesn't take notes/tags itself, so write the distilled result with a follow-up `annotate` call (merges in just `--notes`/`--tags`, leaves everything else alone — no need to retype the record):
+This first pass is title + abstract only, deliberately — it's the cheap triage step, not a deep read. If that's not enough to do #3 justice and the user wants more, that's what "Reading and synthesizing full text" above is for; don't pad out a thin abstract-based summary to look more thorough than it is. `add-doi` doesn't take notes/tags itself, so write the distilled result with a follow-up `annotate` call (merges in just `--notes`/`--tags`, leaves everything else alone — no need to retype the record):
 
 ```
 conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate --doi "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"

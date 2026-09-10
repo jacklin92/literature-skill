@@ -15,6 +15,7 @@ A Claude Code skill that turns literature management into a conversation: ask it
 - **Tag** — Claude classifies by content on top of the field OpenAlex already assigns, no fixed taxonomy, reuses existing tags instead of inventing synonyms; a short relevance/technique note gets attached too (`annotate`, without retyping the record).
 - **Filter** — by tag, year, author, field, or keyword (title, abstract, and notes), any combination. Search results flag ones you've already saved, and ones that look like a different DOI for something you already have (e.g. a preprint vs. its published version).
 - **Export** — regenerates `data/literature.bib` from the catalog (optionally filtered), on demand.
+- **Read** — for a paper with a legal open-access link, Claude can fetch and read the actual full text on request, to answer something the abstract can't, or to synthesize across several saved papers.
 
 ```mermaid
 flowchart TD
@@ -85,9 +86,10 @@ Just ask, in your own words: "find papers on X by author Y published after 2020"
 
 ## Copyright and open access
 
-Whether or not a paper itself is open access, the catalog only ever stores **bibliographic metadata** (title/authors/year/venue/publisher/field/DOI/URL — not copyrightable) and, when available, a short **abstract** (the same thing Google Scholar or PubMed show you). The tool **never downloads full text or PDFs**, so it stays on the safe side of copyright regardless of a paper's access status — that boundary is intentional and should stay that way in any future changes.
+The catalog always stores **bibliographic metadata** (title/authors/year/venue/publisher/field/DOI/URL — not copyrightable) and, when available, a short **abstract**. Beyond that, the line is legitimate access, not "metadata vs. full text":
 
-OpenAlex reports, for essentially every work, whether a legal open-access copy exists and where — that **link** (`oa_url`) is stored alongside the entry and included in the exported BibTeX as a note. Still just a link, never a downloaded copy, and no separate signup or API key needed.
+- OpenAlex reports, for most works, whether a legal open-access copy exists and where — that **link** (`oa_url`) is stored on the entry, included in the exported BibTeX as a note, and Claude can read that specific page to summarize or synthesize the paper on request (no different from you opening it in a browser).
+- No `oa_url`? The skill won't go looking for a way around that — no paywall scraping, no unofficial mirrors. If you already have legitimate access of your own (an institutional download, a PDF you paid for), hand Claude the text or file directly and it can read and summarize that too — that's you using access you already have.
 
 ## License
 
