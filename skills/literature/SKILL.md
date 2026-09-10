@@ -29,8 +29,10 @@ conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" <subco
 ## Search for literature
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search "query" --limit 10
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search "query" [--author NAME] [--venue "journal or conference name"] [--from-year YEAR] [--until-year YEAR] --limit 10
 ```
+
+`query` is free-text topic/keywords; `--author`, `--venue` (journal/conference name), and `--from-year`/`--until-year` (publication date range) narrow it further via Crossref's own query fields, and can be combined with `query` or used alone. Crossref has no publisher-name filter and no subject/field-of-study filter — if the user asks to filter by publisher or academic field, those aren't queryable upstream; field/discipline grouping is handled locally instead, via tags (see Classification below).
 
 Calls the Crossref API and returns candidates (title/authors/year/venue/doi/url/abstract). **You (Claude) judge which results are actually relevant**, summarize them for the user, and let the user pick which ones to keep — never bulk-add everything automatically.
 

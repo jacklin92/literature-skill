@@ -10,7 +10,7 @@ A Claude Code skill that turns literature management into a conversation: ask it
 
 ## How it works
 
-- **Search** — queries Crossref, Claude picks what's actually relevant, you confirm before anything is saved.
+- **Search** — queries Crossref by topic keyword, author, journal/venue, and/or publication year range; Claude picks what's actually relevant, you confirm before anything is saved.
 - **Catalog** — each entry goes into `data/literature.json`, deduplicated by DOI (or title+year). Has a DOI already? `add-doi` fetches the authoritative record directly.
 - **Tag** — Claude classifies by content, no fixed taxonomy, reuses existing tags instead of inventing synonyms.
 - **Filter** — by tag, year, author, or keyword, any combination.
@@ -20,16 +20,22 @@ A Claude Code skill that turns literature management into a conversation: ask it
 flowchart TD
     U["You: find/add/organize papers"] --> Q{What do you have?}
     Q -->|a DOI or link| AD["add-doi"]
-    Q -->|just a topic| S["search (Crossref)"]
+    Q -->|need to find papers| SP["search filters:
+    topic keyword · author
+    journal/venue · year range"]
+    SP --> S["search (Crossref)"]
     S --> R["Claude picks the relevant results"]
-    R --> AD2["add (+ tags)"]
+    R --> AD2["add (+ tags for field/topic)"]
     AD --> J[("data/literature.json")]
     AD2 --> J
-    Q -->|reviewing what's saved| L["list / tags"]
+    Q -->|reviewing what's saved| L["list / tags
+    (filter by tag · year · author · keyword)"]
     L --> J
     J --> B["export-bib"]
     B --> F[("data/literature.bib")]
 ```
+
+Crossref (the search backend) has no publisher-name or subject/field-of-study filter, so those aren't queryable at search time; grouping by field/discipline happens locally afterwards, via tags.
 
 ## Install
 

@@ -10,7 +10,7 @@
 
 ## 運作方式
 
-- **搜尋** —— 查 Crossref,由 Claude 判斷哪些真的相關,存進去之前你會先確認。
+- **搜尋** —— 依主題關鍵字、作者、期刊/會議名稱、出版年份區間查 Crossref,由 Claude 判斷哪些真的相關,存進去之前你會先確認。
 - **建檔** —— 每筆存進 `data/literature.json`,以 DOI(或標題+年份)去重。已經有 DOI 了?用 `add-doi` 直接抓權威記錄。
 - **分類** —— Claude 依內容判斷,沒有固定分類表,會重用既有標籤而不是自創同義詞。
 - **篩選** —— 依標籤、年份、作者或關鍵字,任意組合。
@@ -20,16 +20,22 @@
 flowchart TD
     U["你:找/加/整理文獻"] --> Q{手上有什麼?}
     Q -->|有 DOI 或連結| AD["add-doi"]
-    Q -->|只有主題| S["search(查 Crossref)"]
+    Q -->|要找論文| SP["search 篩選條件:
+    主題關鍵字 · 作者
+    期刊/會議名稱 · 年份區間"]
+    SP --> S["search(查 Crossref)"]
     S --> R["Claude 挑出真正相關的"]
-    R --> AD2["add(補上 tags)"]
+    R --> AD2["add(補上 tags 代表領域/主題)"]
     AD --> J[("data/literature.json")]
     AD2 --> J
-    Q -->|想看已收錄的| L["list / tags"]
+    Q -->|想看已收錄的| L["list / tags
+    (依 tag · 年份 · 作者 · 關鍵字篩選)"]
     L --> J
     J --> B["export-bib"]
     B --> F[("data/literature.bib")]
 ```
+
+Crossref(搜尋的資料來源)沒有出版社篩選,也沒有領域/學科篩選,所以搜尋階段查不到這兩項;領域/學科的分組是之後在本地用 tags 做的。
 
 ## 安裝
 

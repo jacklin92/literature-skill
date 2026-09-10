@@ -127,9 +127,21 @@ def cmd_add_doi(args):
 
 
 def cmd_search(args):
-    url = "https://api.crossref.org/works?" + urllib.parse.urlencode(
-        {"query": args.query, "rows": args.limit}
-    )
+    params = {"rows": args.limit}
+    if args.query:
+        params["query"] = args.query
+    if args.author:
+        params["query.author"] = args.author
+    if args.venue:
+        params["query.container-title"] = args.venue
+    date_filters = []
+    if args.from_year:
+        date_filters.append(f"from-pub-date:{args.from_year}")
+    if args.until_year:
+        date_filters.append(f"until-pub-date:{args.until_year}")
+    if date_filters:
+        params["filter"] = ",".join(date_filters)
+    url = "https://api.crossref.org/works?" + urllib.parse.urlencode(params)
     data = get_json(url)
     items = data.get("message", {}).get("items", [])
     results = [crossref_item_to_entry(it) for it in items]
@@ -203,7 +215,11 @@ def main():
     p_add_doi.set_defaults(func=cmd_add_doi)
 
     p_search = sub.add_parser("search", help="Search Crossref")
-    p_search.add_argument("query")
+    p_search.add_argument("query", nargs="?", default="")
+    p_search.add_argument("--author")
+    p_search.add_argument("--venue", help="Journal/conference name (Crossref container-title)")
+    p_search.add_argument("--from-year")
+    p_search.add_argument("--until-year")
     p_search.add_argument("--limit", type=int, default=10)
     p_search.set_defaults(func=cmd_search)
 
