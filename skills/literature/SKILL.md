@@ -51,15 +51,15 @@ conda create -n literature python=3.11 -y   # only if "literature" isn't listed 
 ## Running the core script
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" <subcommand> ...
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" <subcommand> ...
 ```
 
-> Troubleshooting: on some Windows setups (locale/codepage dependent), `conda run` can raise a `UnicodeEncodeError` when the subprocess prints non-ASCII text. Workaround: resolve the env's own `python.exe` path with `conda info --envs`, then call `<that path>\python.exe "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" ...` directly instead of going through `conda run`.
+> Troubleshooting: on some Windows setups (locale/codepage dependent), `conda run` can raise a `UnicodeEncodeError` when the subprocess prints non-ASCII text. Workaround: resolve the env's own `python.exe` path with `conda info --envs`, then call `<that path>\python.exe "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" ...` directly instead of going through `conda run`.
 
 ## Search for literature
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" search "query" [--author NAME] [--venue "journal or conference name"] [--publisher NAME] [--field "academic field"] [--from-year YEAR] [--until-year YEAR] --limit 10
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" search "query" [--author NAME] [--venue "journal or conference name"] [--publisher NAME] [--field "academic field"] [--from-year YEAR] [--until-year YEAR] --limit 10
 ```
 
 `query` is free-text topic/keywords. All the flags narrow it further and can be combined with `query` or used alone:
@@ -82,7 +82,7 @@ The JSON object each search result gives you already matches what `add` expects 
 If the user already has a specific DOI (they pasted a link, or picked one from search results), prefer `add-doi` over `search` + `add` — it fetches the authoritative record directly, so metadata is more accurate than a keyword search and there's no manual JSON to write:
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" add-doi "10.xxxx/..."
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" add-doi "10.xxxx/..."
 ```
 
 ## Relevance analysis and notes
@@ -96,7 +96,7 @@ Before adding anything from a search, work through three things — say them in 
 This first pass is title + abstract only, deliberately — it's the cheap triage step, not a deep read. If that's not enough to do #3 justice and the user wants more, that's what "Reading and synthesizing full text" above is for; don't pad out a thin abstract-based summary to look more thorough than it is. `add-doi` doesn't take notes/tags itself, so write the distilled result with a follow-up `annotate` call (merges in just `--notes`/`--tags`, leaves everything else alone — no need to retype the record):
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate --doi "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" annotate --doi "10.xxxx/..." --notes "Relevant to: <the specific need>. Approach: <terse technique description>." --tags "tag1,tag2"
 ```
 
 (When adding manually via `add` instead, just include `"notes"`/`"tags"` in that same JSON object.) This way `list`/`export-bib`/`--keyword` carry that judgment forward instead of it living only in chat history — `--keyword` matches `notes` too, not just title/abstract.
@@ -109,7 +109,7 @@ Two independent dimensions, don't confuse them:
 - `tags` have no fixed taxonomy — decide short, consistent tags yourself from the title/abstract (e.g. `nlp`, `transformer`, `survey`) for whatever finer-grained grouping `field` doesn't capture. Reuse existing tags within the same organizing session instead of inventing synonyms. Check what's already in use with:
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" tags
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" tags
 ```
 
 This is cheaper than pulling the whole catalog with `list` just to see the tag vocabulary.
@@ -119,7 +119,7 @@ This is cheaper than pulling the whole catalog with `list` just to see the tag v
 Add entries one at a time, piping JSON through stdin (avoids shell-escaping issues with special characters):
 
 ```
-echo '{"title":"...","authors":["Author One","Author Two"],"year":2024,"venue":"journal or venue name","publisher":"...","field":"...","doi":"...","url":"...","abstract":"...","tags":["tag1","tag2"],"notes":"your own notes"}' | conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" add
+echo '{"title":"...","authors":["Author One","Author Two"],"year":2024,"venue":"journal or venue name","publisher":"...","field":"...","doi":"...","url":"...","abstract":"...","tags":["tag1","tag2"],"notes":"your own notes"}' | conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" add
 ```
 
 Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing (or re-`add-doi`ing) the same entry updates it in place instead of creating a duplicate. Follow up with `export-bib` (see top of this file) so the exported citations stay current.
@@ -127,7 +127,7 @@ Dedup key: `doi` when present, otherwise `title + year`. Re-`add`ing (or re-`add
 To change only `notes`/`tags` on an entry that's already saved (the common case after the relevance analysis above), use `annotate` instead of re-`add`ing the whole record:
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annotate --doi "10.xxxx/..." [--notes "..."] [--tags "tag1,tag2"]
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" annotate --doi "10.xxxx/..." [--notes "..."] [--tags "tag1,tag2"]
 ```
 
 `--tags` replaces the whole tag list (not additive) — pass the full set you want. Identify the entry with `--doi`; for entries that have no DOI, use `--title "exact title" --year YEAR` instead (the same title+year key `add` already dedups on).
@@ -135,7 +135,7 @@ conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" annota
 ## Remove an entry
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" remove --doi "10.xxxx/..."
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" remove --doi "10.xxxx/..."
 ```
 
 Same identification rule as `annotate`: `--doi`, or `--title "exact title" --year YEAR` for entries with no DOI. Confirm with the user before removing anything they didn't explicitly ask to drop.
@@ -143,7 +143,7 @@ Same identification rule as `annotate`: `--doi`, or `--title "exact title" --yea
 ## Filter / list
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" list [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT]
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" list [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT]
 ```
 
 Filters can be combined freely (all given filters must match); omit all of them to list everything. `--keyword` matches title, abstract, and notes. (No `--venue`/`--publisher` filter locally — use `--keyword` for that, or ask Claude to eyeball the small full listing.)
@@ -151,7 +151,7 @@ Filters can be combined freely (all given filters must match); omit all of them 
 ## Export BibTeX
 
 ```
-conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/scripts/catalog.py" export-bib [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT] [--output PATH]
+conda run -n literature python "${CLAUDE_PLUGIN_ROOT}/skills/literature/scripts/catalog.py" export-bib [--tag TAG] [--year YEAR] [--author NAME] [--field TEXT] [--keyword TEXT] [--output PATH]
 ```
 
 No filters exports everything, defaulting to `data/literature.bib`. To export citations for just one topic, pass the matching filter flags — no extra scripting needed. Entry type is picked from OpenAlex's own `type` (conference paper → `@inproceedings`, book chapter → `@incollection`, book → `@book`, dissertation → `@phdthesis`, report → `@techreport`, otherwise `@article`/`@misc` depending on whether a venue is known) — one shared field set across types (not per-type BibTeX fields), good enough for a personal catalog.
